@@ -116,6 +116,12 @@ static const void *kStatusBarStyle = &kStatusBarStyle;
     if ([self settingForKey:setting]) {
         [self _backgroundColorByHexString:[self settingForKey:setting]];
     }
+
+    // Do an explicit update of webview frame here
+    // FIXME: This is ugly...
+    if (IsAtLeastiOSVersion(@"7.0") && self.statusBarOverlaysWebView && self.viewController.navigationController) {
+        [self updateWebViewFrame:self.statusBarOverlaysWebView];
+    }
 }
 
 - (void) _ready:(CDVInvokedUrlCommand*)command
@@ -144,16 +150,38 @@ static const void *kStatusBarStyle = &kStatusBarStyle;
     if (!IsAtLeastiOSVersion(@"7.0") || statusBarOverlaysWebView == _statusBarOverlaysWebView) {
         return;
     }
+    [self updateWebViewFrame:statusBarOverlaysWebView];
+    _statusBarOverlaysWebView = statusBarOverlaysWebView;
+}
 
+- (BOOL) statusBarOverlaysWebView
+{
+    return _statusBarOverlaysWebView;
+}
+
+- (void) updateWebViewFrame:(BOOL)statusBarOverlaysWebView
+{
     CGRect bounds = [[UIScreen mainScreen] bounds];
-    
+
     if (statusBarOverlaysWebView) {
-        
         [_statusBarBackgroundView removeFromSuperview];
-        if (UIDeviceOrientationIsLandscape(self.viewController.interfaceOrientation)) {
-            self.webView.frame = CGRectMake(0, 0, bounds.size.height, bounds.size.width);
+        if (self.viewController.navigationController) {
+            CGRect frame = [[UIScreen mainScreen] bounds];
+            CGRect statusBarFrame = [UIApplication sharedApplication].statusBarFrame;
+            if (UIDeviceOrientationIsLandscape(self.viewController.interfaceOrientation)) {
+                frame.origin.y -= statusBarFrame.size.width;
+                frame.size.height += statusBarFrame.size.width;
+            } else {
+                frame.origin.y -= statusBarFrame.size.height;
+                frame.size.height += statusBarFrame.size.height;
+            }
+            self.webView.frame = frame;
         } else {
-            self.webView.frame = bounds;
+            if (UIDeviceOrientationIsLandscape(self.viewController.interfaceOrientation)) {
+                self.webView.frame = CGRectMake(0, 0, bounds.size.height, bounds.size.width);
+            } else {
+                self.webView.frame = bounds;
+            }
         }
 
     } else {
@@ -164,24 +192,27 @@ static const void *kStatusBarStyle = &kStatusBarStyle;
 
         CGRect frame = self.webView.frame;
 
-        if (UIDeviceOrientationIsLandscape(self.viewController.interfaceOrientation)) {
-            frame.origin.y = statusBarFrame.size.width;
-            frame.size.height -= statusBarFrame.size.width;
+        if (self.viewController.navigationController) {
+            CGRect statusBarFrame = [UIApplication sharedApplication].statusBarFrame;
+            if (UIDeviceOrientationIsLandscape(self.viewController.interfaceOrientation)) {
+                frame.origin.y -= statusBarFrame.size.width;
+                frame.size.height += statusBarFrame.size.width;
+            } else {
+                frame.origin.y -= statusBarFrame.size.height;
+                frame.size.height += statusBarFrame.size.height;
+            }
         } else {
-            frame.origin.y = statusBarFrame.size.height;
-            frame.size.height -= statusBarFrame.size.height;
+            if (UIDeviceOrientationIsLandscape(self.viewController.interfaceOrientation)) {
+                frame.origin.y = statusBarFrame.size.width;
+                frame.size.height -= statusBarFrame.size.width;
+            } else {
+                frame.origin.y = statusBarFrame.size.height;
+                frame.size.height -= statusBarFrame.size.height;
+            }
         }
-        
         self.webView.frame = frame;
         [self.webView.superview addSubview:_statusBarBackgroundView];
     }
-    
-    _statusBarOverlaysWebView = statusBarOverlaysWebView;
-}
-
-- (BOOL) statusBarOverlaysWebView
-{
-    return _statusBarOverlaysWebView;
 }
 
 - (void) overlaysWebView:(CDVInvokedUrlCommand*)command
